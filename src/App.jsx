@@ -27,6 +27,9 @@ import { Logbook } from "./components/Logbook";
 import { PracticeArena } from "./components/PracticeArena";
 import { EditQuiz } from "./components/EditQuiz";
 import { GuestJoin } from "./components/GuestJoin";
+import { RoleSetup } from "./components/RoleSetup";
+import { InstructorClasses } from "./components/InstructorClasses"; // <-- Added Import
+
 // Auth Provider
 import { AuthProvider } from "./context/AuthContext";
 
@@ -52,13 +55,19 @@ const App = () => {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/dashboard/manage" element={<QuizStudio />} />
           <Route path="/dashboard/analytics" element={<Analytics />} />
-          <Route path="/dashboard/logbook" element={<Logbook />} />{" "}
+          <Route path="/dashboard/logbook" element={<Logbook />} />
           <Route path="/dashboard/practice" element={<PracticeArena />} />
           <Route path="/dashboard/edit-quiz/:quizId" element={<EditQuiz />} />
+          <Route
+            path="/dashboard/classes"
+            element={<InstructorClasses />}
+          />{" "}
+          {/* <-- Added Route */}
         </Route>
 
-        {/* GROUP 3: Isolated Routes (NO Sidebar, Fullscreen Player) */}
+        {/* GROUP 3: Isolated Routes (NO Sidebar, Fullscreen Player/Setup) */}
         <Route path="/voyage/:quizId" element={<QuizPlayer />} />
+        <Route path="/role-setup" element={<RoleSetup />} />
 
         {/* GROUP 4: Fallback */}
         <Route path="*" element={<NotFound />} />

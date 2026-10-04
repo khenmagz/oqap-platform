@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   FiPlus,
@@ -11,6 +11,7 @@ import {
   FiShuffle,
   FiMessageSquare,
   FiArrowLeft,
+  FiUsers,
 } from "react-icons/fi";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -29,6 +30,10 @@ export const QuizStudio = () => {
   const [deadline, setDeadline] = useState(null);
   const [shuffleQuestions, setShuffleQuestions] = useState(false);
   const [feedbackMode, setFeedbackMode] = useState("score_only");
+
+  // NEW: State for Classes
+  const [classes, setClasses] = useState([]);
+  const [selectedClassId, setSelectedClassId] = useState("");
   const [isDeploying, setIsDeploying] = useState(false);
 
   const [questions, setQuestions] = useState([
@@ -41,6 +46,26 @@ export const QuizStudio = () => {
       points: 1,
     },
   ]);
+
+  // NEW: Fetch available classes when the component loads
+  useEffect(() => {
+    if (!userData?.id) return;
+    const fetchClasses = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("classes")
+          .select("id, name")
+          .eq("instructor_id", userData.id)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        setClasses(data || []);
+      } catch (err) {
+        console.error("Error fetching classes:", err);
+      }
+    };
+    fetchClasses();
+  }, [userData?.id]);
 
   const addQuestion = () =>
     setQuestions([
@@ -160,6 +185,7 @@ export const QuizStudio = () => {
         .insert([
           {
             instructor_id: userData.id,
+            class_id: selectedClassId || null, // NEW: Attach the class ID to the quiz
             title: quizTitle,
             quiz_code: generatedCode,
             max_attempts: parseInt(maxAttempts, 10),
@@ -195,6 +221,7 @@ export const QuizStudio = () => {
       if (questionsError) throw questionsError;
 
       setQuizTitle("");
+      setSelectedClassId("");
       setQuestions([
         {
           id: 1,
@@ -246,7 +273,26 @@ export const QuizStudio = () => {
           className="w-full bg-transparent text-3xl md:text-4xl font-black text-[#003B46] placeholder-[#006064]/20 py-2 focus:outline-none mb-8 tracking-tight leading-none border-b-2 border-transparent focus:border-[#26C6DA] transition-colors"
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* NEW: Class Selection Dropdown */}
+          <div className="bg-white px-5 py-4 rounded-xl border border-[#006064]/10 flex flex-col gap-2 shadow-sm">
+            <span className="text-xs font-bold text-[#00838F] uppercase tracking-widest flex items-center gap-2">
+              <FiUsers /> Assign Class
+            </span>
+            <select
+              value={selectedClassId}
+              onChange={(e) => setSelectedClassId(e.target.value)}
+              className="bg-transparent text-sm font-bold text-[#003B46] focus:outline-none cursor-pointer"
+            >
+              <option value="">No Class (Open Access)</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="bg-white px-5 py-4 rounded-xl border border-[#006064]/10 flex flex-col gap-2 shadow-sm">
             <span className="text-xs font-bold text-[#00838F] uppercase tracking-widest flex items-center gap-2">
               <FiActivity /> Attempts
@@ -275,7 +321,7 @@ export const QuizStudio = () => {
               timeFormat="h:mm aa"
               timeIntervals={15}
               dateFormat="MMM d, yyyy h:mm aa"
-              placeholderText="No deadline set"
+              placeholderText="No deadline"
               className="w-full bg-transparent text-sm font-bold text-[#003B46] focus:outline-none placeholder-[#006064]/30 cursor-pointer"
             />
           </div>
@@ -317,7 +363,7 @@ export const QuizStudio = () => {
             >
               <option value="hidden">Hidden (No Score)</option>
               <option value="score_only">Show Score Only</option>
-              <option value="full">Score + Deep Dive Answers</option>
+              <option value="full">Score + Deep Dive</option>
             </select>
           </div>
         </div>

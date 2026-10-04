@@ -12,6 +12,7 @@ import {
   FiBarChart2,
   FiZap,
   FiBox,
+  FiUsers, // <-- Added for the Classes tab
 } from "react-icons/fi";
 
 export const Navbar = () => {
@@ -31,6 +32,7 @@ export const Navbar = () => {
 
   const instructorLinks = [
     { name: "Dashboard", path: "/dashboard", icon: <FiHome /> },
+    { name: "My Classes", path: "/dashboard/classes", icon: <FiUsers /> }, // <-- Added Route
     { name: "Create Quiz", path: "/dashboard/manage", icon: <FiPlusSquare /> },
     {
       name: "Class Analytics",

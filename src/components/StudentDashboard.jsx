@@ -13,6 +13,9 @@ import {
   FiEye,
   FiAlertCircle,
   FiKey,
+  FiUsers,
+  FiUserPlus,
+  FiBook,
 } from "react-icons/fi";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../config/supabase";
@@ -59,71 +62,138 @@ export const StudentDashboard = () => {
   const [pendingQuiz, setPendingQuiz] = useState(null);
   const [attemptData, setAttemptData] = useState({ used: 0, max: 1 });
 
+  // History & Classes State
+  const [activeTab, setActiveTab] = useState("history");
   const [history, setHistory] = useState([]);
+  const [classes, setClasses] = useState([]);
   const [averageScore, setAverageScore] = useState(0);
-  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Join Class Modal State
+  const [isJoinClassModalOpen, setIsJoinClassModalOpen] = useState(false);
+  const [classCodeInput, setClassCodeInput] = useState("");
+  const [isJoiningClass, setIsJoiningClass] = useState(false);
 
   const [reviewAttempt, setReviewAttempt] = useState(null);
 
   const showToast = (message, type = "info") => setToast({ message, type });
 
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const { data: attempts, error } = await supabase
-          .from("quiz_attempts")
-          .select(
-            `*, quizzes (title, release_grades, release_answers),
-            student_answers (is_correct, points_awarded, given_answer, questions (content, correct_answer, points, options_data, question_type))`,
-          )
-          .eq("student_id", userData.id)
-          .eq("status", "completed")
-          .order("completed_at", { ascending: false });
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      // 1. Fetch Quiz History
+      const { data: attempts, error: historyError } = await supabase
+        .from("quiz_attempts")
+        .select(
+          `*, quizzes (title, release_grades, release_answers),
+          student_answers (is_correct, points_awarded, given_answer, questions (content, correct_answer, points, options_data, question_type))`,
+        )
+        .eq("student_id", userData.id)
+        .eq("status", "completed")
+        .order("completed_at", { ascending: false });
 
-        if (error) throw error;
+      if (historyError) throw historyError;
 
-        let totalEarned = 0;
-        let totalPossible = 0;
+      let totalEarned = 0;
+      let totalPossible = 0;
 
-        const processedHistory = (attempts || []).map((attempt) => {
-          let attemptMax = 0;
-          attempt.student_answers.forEach((ans) => {
-            attemptMax += ans.questions.points;
-          });
-
-          totalEarned += attempt.score;
-          totalPossible += attemptMax;
-
-          return {
-            ...attempt,
-            maxScore: attemptMax,
-            percentage:
-              attemptMax > 0
-                ? Math.round((attempt.score / attemptMax) * 100)
-                : 0,
-            date: new Date(attempt.completed_at).toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            }),
-          };
+      const processedHistory = (attempts || []).map((attempt) => {
+        let attemptMax = 0;
+        attempt.student_answers.forEach((ans) => {
+          attemptMax += ans.questions.points;
         });
 
-        setHistory(processedHistory);
-        setAverageScore(
-          totalPossible > 0
-            ? Math.round((totalEarned / totalPossible) * 100)
-            : 0,
-        );
-      } catch (error) {
-        console.error("Error loading quiz history:", error);
-      } finally {
-        setIsHistoryLoading(false);
-      }
-    };
+        totalEarned += attempt.score;
+        totalPossible += attemptMax;
 
-    if (userData?.id) fetchHistory();
+        return {
+          ...attempt,
+          maxScore: attemptMax,
+          percentage:
+            attemptMax > 0 ? Math.round((attempt.score / attemptMax) * 100) : 0,
+          date: new Date(attempt.completed_at).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          }),
+        };
+      });
+
+      setHistory(processedHistory);
+      setAverageScore(
+        totalPossible > 0 ? Math.round((totalEarned / totalPossible) * 100) : 0,
+      );
+
+      // 2. Fetch Enrolled Classes (Removed user_profiles to bypass the security block)
+      const { data: enrollments, error: classError } = await supabase
+        .from("class_enrollments")
+        .select(
+          `
+          joined_at, 
+          classes (
+            id, name, class_code
+          )
+        `,
+        )
+        .eq("student_id", userData.id)
+        .order("joined_at", { ascending: false });
+
+      if (classError) throw classError;
+      setClasses(enrollments || []);
+    } catch (error) {
+      console.error("Error loading dashboard data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (userData?.id) fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userData?.id]);
+
+  const handleJoinClass = async () => {
+    if (!classCodeInput.trim())
+      return showToast("Please enter a class code.", "error");
+    setIsJoiningClass(true);
+
+    try {
+      // Find the class by code
+      const { data: classData, error: classError } = await supabase
+        .from("classes")
+        .select("id, name")
+        .eq("class_code", classCodeInput.toUpperCase())
+        .maybeSingle();
+
+      if (classError || !classData) {
+        showToast("Invalid class code. Please check and try again.", "error");
+        setIsJoiningClass(false);
+        return;
+      }
+
+      // Enroll the student
+      const { error: enrollError } = await supabase
+        .from("class_enrollments")
+        .insert([{ class_id: classData.id, student_id: userData.id }]);
+
+      if (enrollError) {
+        if (enrollError.code === "23505") {
+          showToast("You are already enrolled in this class.", "error");
+        } else {
+          throw enrollError;
+        }
+      } else {
+        showToast(`Successfully joined ${classData.name}!`, "success");
+        setIsJoinClassModalOpen(false);
+        setClassCodeInput("");
+        fetchData(); // Refresh the lists
+      }
+    } catch (error) {
+      showToast("Failed to join class. Please try again.", "error");
+    } finally {
+      setIsJoiningClass(false);
+    }
+  };
 
   const handleJoinQuiz = async (e) => {
     e.preventDefault();
@@ -220,7 +290,7 @@ export const StudentDashboard = () => {
 
       {!pendingQuiz ? (
         <>
-          <div className="relative mb-16 max-w-4xl mt-4">
+          <div className="relative mb-12 max-w-4xl mt-4">
             <div className="flex items-center gap-2 mb-4 opacity-70">
               <FiKey className="text-[#00838F]" />
               <span className="text-xs font-black uppercase tracking-widest text-[#006064]">
@@ -253,110 +323,201 @@ export const StudentDashboard = () => {
             </form>
           </div>
 
-          <div className="grid lg:grid-cols-12 gap-10 border-t border-[#006064]/10 pt-12 flex-1">
-            <div className="lg:col-span-7">
-              <h2 className="text-xl font-black text-[#003B46] mb-6 tracking-wide">
-                Assessment History
-              </h2>
-              <div className="space-y-4">
-                {isHistoryLoading ? (
-                  <div className="animate-pulse space-y-4">
-                    <div className="h-24 bg-white border border-[#006064]/5 rounded-2xl shadow-sm" />
-                    <div className="h-24 bg-white border border-[#006064]/5 rounded-2xl shadow-sm" />
-                  </div>
-                ) : history.length === 0 ? (
-                  <div className="bg-white rounded-2xl border border-[#006064]/10 p-10 text-center shadow-sm">
-                    <FiTarget className="text-4xl text-[#00838F]/30 mx-auto mb-3" />
-                    <p className="font-bold text-[#003B46] text-lg">
-                      No assessments completed yet.
-                    </p>
-                    <p className="text-sm font-medium text-[#006064]/60 mt-1">
-                      Your past results will appear here.
-                    </p>
-                  </div>
-                ) : (
-                  history.map((attempt) => (
-                    <div
-                      key={attempt.id}
-                      onClick={() =>
-                        attempt.quizzes.release_answers &&
-                        setReviewAttempt(attempt)
-                      }
-                      className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${attempt.quizzes.release_answers ? "bg-white border-[#006064]/10 hover:border-[#00838F]/50 cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-0.5" : "bg-gray-50 border-gray-200"}`}
-                    >
-                      <div>
-                        <h3 className="font-bold text-[#003B46] text-lg leading-tight mb-1">
-                          {attempt.quizzes.title}
-                        </h3>
-                        <p className="text-xs font-bold text-[#006064]/50">
-                          {attempt.date}
-                        </p>
-                      </div>
+          {/* Tabs */}
+          <div className="flex gap-4 mb-8">
+            <button
+              onClick={() => setActiveTab("history")}
+              className={`px-6 py-2.5 rounded-xl text-sm font-black tracking-widest uppercase transition-all shadow-sm ${activeTab === "history" ? "bg-[#00838F] text-white" : "bg-white text-[#006064]/60 border border-[#006064]/10 hover:bg-[#F8FDFD]"}`}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setActiveTab("classes")}
+              className={`px-6 py-2.5 rounded-xl text-sm font-black tracking-widest uppercase transition-all shadow-sm ${activeTab === "classes" ? "bg-[#00838F] text-white" : "bg-white text-[#006064]/60 border border-[#006064]/10 hover:bg-[#F8FDFD]"}`}
+            >
+              My Classes
+            </button>
+          </div>
 
-                      <div className="flex items-center gap-5">
-                        <div className="text-right">
-                          <p className="text-[10px] font-black text-[#00838F] uppercase tracking-widest mb-0.5">
-                            Score
+          {/* HISTORY VIEW */}
+          {activeTab === "history" && (
+            <div className="grid lg:grid-cols-12 gap-10 flex-1">
+              <div className="lg:col-span-7">
+                <h2 className="text-xl font-black text-[#003B46] mb-6 tracking-wide">
+                  Recent Assessments
+                </h2>
+                <div className="space-y-4">
+                  {isLoading ? (
+                    <div className="animate-pulse space-y-4">
+                      <div className="h-24 bg-white border border-[#006064]/5 rounded-2xl shadow-sm" />
+                      <div className="h-24 bg-white border border-[#006064]/5 rounded-2xl shadow-sm" />
+                    </div>
+                  ) : history.length === 0 ? (
+                    <div className="bg-white rounded-2xl border border-[#006064]/10 p-10 text-center shadow-sm">
+                      <FiTarget className="text-4xl text-[#00838F]/30 mx-auto mb-3" />
+                      <p className="font-bold text-[#003B46] text-lg">
+                        No assessments completed yet.
+                      </p>
+                      <p className="text-sm font-medium text-[#006064]/60 mt-1">
+                        Your past results will appear here.
+                      </p>
+                    </div>
+                  ) : (
+                    history.slice(0, 5).map((attempt) => (
+                      <div
+                        key={attempt.id}
+                        onClick={() =>
+                          attempt.quizzes.release_answers &&
+                          setReviewAttempt(attempt)
+                        }
+                        className={`flex items-center justify-between p-5 rounded-2xl border transition-all ${attempt.quizzes.release_answers ? "bg-white border-[#006064]/10 hover:border-[#00838F]/50 cursor-pointer shadow-sm hover:shadow-md hover:-translate-y-0.5" : "bg-gray-50 border-gray-200"}`}
+                      >
+                        <div>
+                          <h3 className="font-bold text-[#003B46] text-lg leading-tight mb-1">
+                            {attempt.quizzes.title}
+                          </h3>
+                          <p className="text-xs font-bold text-[#006064]/50">
+                            {attempt.date}
                           </p>
-                          {attempt.quizzes.release_grades ? (
-                            <p
-                              className={`font-black text-lg ${attempt.percentage >= 60 ? "text-emerald-600" : "text-red-500"}`}
-                            >
-                              {attempt.score}{" "}
-                              <span className="text-sm text-gray-400">
-                                / {attempt.maxScore}
-                              </span>
+                        </div>
+
+                        <div className="flex items-center gap-5">
+                          <div className="text-right">
+                            <p className="text-[10px] font-black text-[#00838F] uppercase tracking-widest mb-0.5">
+                              Score
                             </p>
-                          ) : (
-                            <p className="font-bold text-gray-400 flex items-center justify-end gap-1.5 text-sm mt-1">
-                              <FiLock /> Hidden
-                            </p>
+                            {attempt.quizzes.release_grades ? (
+                              <p
+                                className={`font-black text-lg ${attempt.percentage >= 60 ? "text-emerald-600" : "text-red-500"}`}
+                              >
+                                {attempt.score}{" "}
+                                <span className="text-sm text-gray-400">
+                                  / {attempt.maxScore}
+                                </span>
+                              </p>
+                            ) : (
+                              <p className="font-bold text-gray-400 flex items-center justify-end gap-1.5 text-sm mt-1">
+                                <FiLock /> Hidden
+                              </p>
+                            )}
+                          </div>
+                          {attempt.quizzes.release_answers && (
+                            <div className="w-8 h-8 rounded-full bg-[#E0F7FA] text-[#00838F] flex items-center justify-center">
+                              <FiEye className="text-sm" />
+                            </div>
                           )}
                         </div>
-                        {attempt.quizzes.release_answers && (
-                          <div className="w-8 h-8 rounded-full bg-[#E0F7FA] text-[#00838F] flex items-center justify-center">
-                            <FiEye className="text-sm" />
-                          </div>
-                        )}
                       </div>
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="lg:col-span-5">
-              <h2 className="text-xl font-black text-[#003B46] mb-6 tracking-wide">
-                Performance Overview
-              </h2>
-              <div className="bg-white p-8 rounded-3xl border border-[#006064]/10 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-[#E0F7FA]/50 rounded-bl-full pointer-events-none" />
-                <div className="relative z-10">
-                  <p className="text-5xl font-black text-[#003B46] tracking-tighter mb-2">
-                    {averageScore}
-                    <span className="text-2xl text-[#00838F]">%</span>
-                  </p>
-                  <p className="font-bold text-[#006064]/50 uppercase tracking-widest text-xs mb-8">
-                    Overall Average
-                  </p>
-
-                  <div className="space-y-4">
-                    <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-[#00838F] transition-all duration-1000 rounded-full"
-                        style={{ width: `${averageScore}%` }}
-                      />
-                    </div>
-                    <p className="text-xs font-medium text-[#006064]/60 leading-relaxed">
-                      {history.length === 0
-                        ? "Complete your first assessment to begin tracking your overall performance."
-                        : "Based on your total points earned across all completed assessments."}
+              <div className="lg:col-span-5">
+                <h2 className="text-xl font-black text-[#003B46] mb-6 tracking-wide">
+                  Performance Overview
+                </h2>
+                <div className="bg-white p-8 rounded-3xl border border-[#006064]/10 shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-[#E0F7FA]/50 rounded-bl-full pointer-events-none" />
+                  <div className="relative z-10">
+                    <p className="text-5xl font-black text-[#003B46] tracking-tighter mb-2">
+                      {averageScore}
+                      <span className="text-2xl text-[#00838F]">%</span>
                     </p>
+                    <p className="font-bold text-[#006064]/50 uppercase tracking-widest text-xs mb-8">
+                      Overall Average
+                    </p>
+
+                    <div className="space-y-4">
+                      <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-[#00838F] transition-all duration-1000 rounded-full"
+                          style={{ width: `${averageScore}%` }}
+                        />
+                      </div>
+                      <p className="text-xs font-medium text-[#006064]/60 leading-relaxed">
+                        {history.length === 0
+                          ? "Complete your first assessment to begin tracking your overall performance."
+                          : "Based on your total points earned across all completed assessments."}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* CLASSES VIEW */}
+          {activeTab === "classes" && (
+            <div className="bg-white border border-[#006064]/10 rounded-2xl shadow-sm overflow-hidden flex-1">
+              <div className="px-6 py-5 border-b border-[#006064]/10 flex items-center justify-between bg-[#F8FDFD]">
+                <h2 className="text-lg font-black text-[#003B46] tracking-wide">
+                  Enrolled Classes
+                </h2>
+                <button
+                  onClick={() => setIsJoinClassModalOpen(true)}
+                  className="bg-white border border-[#006064]/20 hover:bg-[#F8FDFD] hover:border-[#00838F] text-[#006064] hover:text-[#00838F] px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center gap-2 transition-colors shadow-sm"
+                >
+                  <FiUserPlus className="text-base" /> Join Class
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left text-[#006064]">
+                  <thead className="text-xs text-[#00838F] bg-white uppercase tracking-widest border-b border-[#006064]/10">
+                    <tr>
+                      <th className="px-6 py-5 font-black">Class Name</th>
+                      <th className="px-6 py-5 font-black">Instructor</th>
+                      <th className="px-6 py-5 font-black">Joined</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isLoading ? (
+                      <tr>
+                        <td
+                          colSpan="3"
+                          className="px-6 py-12 text-center text-[#006064]/40 font-bold animate-pulse"
+                        >
+                          Loading your classes...
+                        </td>
+                      </tr>
+                    ) : classes.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan="3"
+                          className="px-6 py-16 text-center text-[#006064]/50 font-medium"
+                        >
+                          You haven't joined any classes yet. Click 'Join Class'
+                          to enter a code.
+                        </td>
+                      </tr>
+                    ) : (
+                      classes.map((enrollment, idx) => (
+                        <tr
+                          key={idx}
+                          className="border-b border-[#006064]/5 hover:bg-[#F8FDFD] transition-colors last:border-0"
+                        >
+                          <td className="px-6 py-5 font-bold text-[#003B46] flex items-center gap-3">
+                            <FiBook className="text-[#00838F]" />
+                            {enrollment.classes?.name || "Unknown Class"}
+                          </td>
+                          <td className="px-6 py-5 font-medium">
+                            {enrollment.classes?.user_profiles?.full_name ||
+                              "Instructor"}
+                          </td>
+                          <td className="px-6 py-5 font-medium">
+                            {new Date(
+                              enrollment.joined_at,
+                            ).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <div className="max-w-3xl mx-auto w-full animate-fade-in-up mt-8">
@@ -447,6 +608,51 @@ export const StudentDashboard = () => {
         </div>
       )}
 
+      {/* JOIN CLASS MODAL */}
+      {isJoinClassModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-[#003B46]/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl relative border border-[#006064]/10">
+            <button
+              onClick={() => setIsJoinClassModalOpen(false)}
+              className="absolute top-6 right-6 text-[#006064]/40 hover:text-[#003B46] transition-colors"
+            >
+              <FiX className="text-2xl" />
+            </button>
+            <h2 className="text-2xl font-black text-[#003B46] mb-6 tracking-tight">
+              Join a Class
+            </h2>
+            <p className="text-sm font-medium text-[#006064]/70 mb-6">
+              Ask your instructor for the 6-character class code and enter it
+              below.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <input
+                  type="text"
+                  value={classCodeInput}
+                  onChange={(e) =>
+                    setClassCodeInput(e.target.value.toUpperCase())
+                  }
+                  placeholder="e.g. A1B2C3"
+                  maxLength={6}
+                  className="w-full bg-[#F8FDFD] border border-[#006064]/10 rounded-xl px-4 py-4 text-center text-xl font-black text-[#00838F] focus:outline-none focus:border-[#26C6DA] transition-all tracking-[0.2em]"
+                />
+              </div>
+            </div>
+            <div className="mt-8">
+              <button
+                onClick={handleJoinClass}
+                disabled={isJoiningClass || classCodeInput.length < 3}
+                className="w-full bg-[#00838F] hover:bg-[#006064] disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl py-3.5 text-sm font-black tracking-widest uppercase transition-colors shadow-md"
+              >
+                {isJoiningClass ? "Joining..." : "Join Class"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REVIEW MODAL */}
       {reviewAttempt && (
         <div className="fixed inset-0 z-[100] bg-[#003B46]/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden border border-[#006064]/10 animate-fade-in-up">

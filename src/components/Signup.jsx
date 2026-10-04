@@ -9,11 +9,12 @@ import {
   FiEyeOff,
   FiBookOpen,
   FiPieChart,
-  FiShield,
   FiCheckCircle,
   FiXCircle,
   FiChevronLeft,
 } from "react-icons/fi";
+import { FcGoogle } from "react-icons/fc";
+import { supabase } from "../config/supabase";
 import { useAuth } from "../hooks/useAuth";
 
 export const Signup = () => {
@@ -25,9 +26,7 @@ export const Signup = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
   const [isFocused, setIsFocused] = useState({ password: false });
-
   const { signUp } = useAuth();
   const navigate = useNavigate();
 
@@ -43,7 +42,7 @@ export const Signup = () => {
 
   const isPasswordValid = Object.values(passwordCriteria).every(Boolean);
 
-  const handleSubmit = async (e) => {
+  const handleEmailSubmit = async (e) => {
     e.preventDefault();
     setError("");
 
@@ -58,8 +57,6 @@ export const Signup = () => {
     }
 
     setLoading(true);
-
-    // Creates a Student account
     const { error } = await signUp(email, password, fullName, "student");
 
     if (error) {
@@ -70,9 +67,19 @@ export const Signup = () => {
     }
   };
 
+  const handleGoogleSignup = async () => {
+    setError("");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`,
+      },
+    });
+    if (error) setError(error.message);
+  };
+
   return (
     <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-[#0A0F14] text-white">
-      {/* Back to Home Button */}
       <Link
         to="/"
         className="absolute top-8 left-6 md:left-12 z-50 flex items-center gap-2 text-gray-400 hover:text-[#26C6DA] transition-colors font-bold text-xs uppercase tracking-widest"
@@ -80,12 +87,10 @@ export const Signup = () => {
         <FiChevronLeft className="text-lg" /> Back to Home
       </Link>
 
-      {/* Background Accents */}
       <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] rounded-full bg-[#003B46]/40 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] rounded-full bg-[#006B7D]/20 blur-[150px] pointer-events-none" />
 
       <div className="relative z-10 w-full max-w-6xl mx-auto flex flex-col lg:flex-row items-center justify-center lg:justify-between gap-12 lg:gap-16 px-6 py-12 mt-12 lg:mt-0">
-        {/* Left Panel */}
         <div className="hidden lg:flex flex-col flex-1 max-w-lg">
           <div className="flex items-center gap-3 mb-8 group">
             <FiAnchor className="text-5xl text-[#26C6DA] group-hover:rotate-12 transition-transform duration-500" />
@@ -93,17 +98,14 @@ export const Signup = () => {
               DEPTH
             </span>
           </div>
-
           <h1 className="text-5xl lg:text-6xl font-extrabold leading-tight mb-6">
             Begin your <br />
             <span style={{ color: brandTeal }}>learning voyage.</span>
           </h1>
-
           <p className="text-lg leading-relaxed mb-10 font-medium max-w-md text-gray-300">
             Create a student account to access your personal Practice Arena,
             generate AI flashcards, and track your mastery over time.
           </p>
-
           <div className="flex flex-wrap gap-4">
             <div className="flex items-center gap-2 px-5 py-2.5 bg-white/5 backdrop-blur-md rounded-full border border-white/10 shadow-sm">
               <FiBookOpen className="text-lg text-[#26C6DA]" />
@@ -116,7 +118,6 @@ export const Signup = () => {
           </div>
         </div>
 
-        {/* Right Panel - Form */}
         <div className="w-full max-w-md lg:max-w-lg mt-8 lg:mt-0">
           <div className="lg:hidden flex justify-center items-center gap-2 mb-8">
             <FiAnchor className="text-3xl text-[#26C6DA]" />
@@ -135,7 +136,26 @@ export const Signup = () => {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <button
+              onClick={handleGoogleSignup}
+              className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-[#003B46] font-bold py-3.5 px-4 rounded-2xl transition-colors mb-6"
+            >
+              <FcGoogle className="text-2xl" />
+              Sign up with Google
+            </button>
+
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-700" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="px-4 font-bold tracking-widest text-gray-500 uppercase bg-[#121A21] rounded-full">
+                  OR EMAIL
+                </span>
+              </div>
+            </div>
+
+            <form onSubmit={handleEmailSubmit} className="space-y-4">
               {error && (
                 <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-2xl text-sm flex items-center gap-3 font-medium">
                   <span className="text-xl">⚠</span>
@@ -143,7 +163,6 @@ export const Signup = () => {
                 </div>
               )}
 
-              {/* Full Name */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-400">
                   Full Name
@@ -161,7 +180,6 @@ export const Signup = () => {
                 </div>
               </div>
 
-              {/* Email */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-400">
                   Email Address
@@ -179,7 +197,6 @@ export const Signup = () => {
                 </div>
               </div>
 
-              {/* Password */}
               <div className="space-y-1.5 relative">
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-400">
                   Password
@@ -214,7 +231,6 @@ export const Signup = () => {
                 </div>
               </div>
 
-              {/* REAL-TIME PASSWORD GUIDELINES */}
               {(isFocused.password || password.length > 0) && (
                 <div className="bg-[#0A0F14] border border-gray-800 rounded-xl p-4 mt-2">
                   <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">
@@ -275,7 +291,6 @@ export const Signup = () => {
                 </div>
               )}
 
-              {/* Confirm Password */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-400">
                   Confirm Password

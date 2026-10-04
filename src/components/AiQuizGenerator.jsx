@@ -70,13 +70,7 @@ const AiQuizGenerator = ({ onGenerate }) => {
       reader.onload = async () => {
         try {
           const base64Data = reader.result.split(",")[1];
-
           const genAI = new GoogleGenerativeAI(apiKey);
-
-          const model = genAI.getGenerativeModel({
-            model: "gemini-flash-lite-latest",
-            generationConfig: { responseMimeType: "application/json" },
-          });
 
           const prompt = `You are an expert educator. Generate EXACTLY ${numQuestions} questions based ONLY on the attached PDF document.
           Difficulty level: ${difficulty}.
@@ -122,44 +116,87 @@ const AiQuizGenerator = ({ onGenerate }) => {
             },
           };
 
-          const result = await model.generateContent([prompt, pdfPart]);
-          const responseText = result.response.text();
+          // Define our robust fallback list
+          const fallbackModels = [
+            "gemini-1.5-flash",
+            "gemini-1.5-flash-8b",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-pro-latest",
+            "gemini-flash-lite-latest",
+            "gemini-1.0-pro",
+          ];
 
-          const generatedQuestions = JSON.parse(responseText);
+          let success = false;
+          let lastApiError = null;
 
-          const formattedQuestions = generatedQuestions.map((q, idx) => {
-            let fixedAnswer = q.correctAnswer;
-            let fixedOptions = q.options || [];
+          // The Fallback Engine
+          for (const modelName of fallbackModels) {
+            try {
+              console.log(`Attempting generation with: ${modelName}`);
 
-            if (q.type === "true_false") {
-              fixedOptions = ["True", "False"];
-              if (fixedAnswer === 0 || fixedAnswer === "0")
-                fixedAnswer = "True";
-              if (fixedAnswer === 1 || fixedAnswer === "1")
-                fixedAnswer = "False";
+              const model = genAI.getGenerativeModel({
+                model: modelName,
+                generationConfig: { responseMimeType: "application/json" },
+              });
+
+              const result = await model.generateContent([prompt, pdfPart]);
+              const responseText = result.response.text();
+
+              const generatedQuestions = JSON.parse(responseText);
+
+              const formattedQuestions = generatedQuestions.map((q, idx) => {
+                let fixedAnswer = q.correctAnswer;
+                let fixedOptions = q.options || [];
+
+                if (q.type === "true_false") {
+                  fixedOptions = ["True", "False"];
+                  if (fixedAnswer === 0 || fixedAnswer === "0")
+                    fixedAnswer = "True";
+                  if (fixedAnswer === 1 || fixedAnswer === "1")
+                    fixedAnswer = "False";
+                }
+
+                if (
+                  q.type === "identification" &&
+                  typeof fixedAnswer === "number"
+                ) {
+                  fixedAnswer = String(fixedAnswer);
+                }
+
+                return {
+                  ...q,
+                  options: fixedOptions,
+                  correctAnswer: fixedAnswer,
+                  id: Date.now() + idx,
+                };
+              });
+
+              onGenerate(formattedQuestions);
+              setIsOpen(false);
+              setPdfFile(null);
+
+              success = true;
+              break; // If successful, exit the fallback loop immediately
+            } catch (apiError) {
+              console.warn(
+                `[API Fallback] ${modelName} failed:`,
+                apiError.message,
+              );
+              lastApiError = apiError;
+              // Loop will automatically continue to the next model
             }
+          }
 
-            if (
-              q.type === "identification" &&
-              typeof fixedAnswer === "number"
-            ) {
-              fixedAnswer = String(fixedAnswer);
-            }
-
-            return {
-              ...q,
-              options: fixedOptions,
-              correctAnswer: fixedAnswer,
-              id: Date.now() + idx,
-            };
-          });
-
-          onGenerate(formattedQuestions);
-          setIsOpen(false);
-          setPdfFile(null);
-        } catch (apiError) {
-          console.error("SDK Error:", apiError);
-          setError(`API Error: ${apiError.message}`);
+          // If the loop finishes and none of the models succeeded, throw the error
+          if (!success) {
+            throw new Error(
+              `All AI models are currently busy. Please try again. (Last error: ${lastApiError?.message})`,
+            );
+          }
+        } catch (error) {
+          console.error("Process Error:", error);
+          setError(`Error: ${error.message}`);
         } finally {
           setIsGenerating(false);
         }

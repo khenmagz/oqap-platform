@@ -12,6 +12,8 @@ import {
   FiTrendingUp,
   FiBarChart2,
 } from "react-icons/fi";
+import { FcGoogle } from "react-icons/fc";
+import { supabase } from "../config/supabase";
 import { useAuth } from "../hooks/useAuth";
 
 export const Login = () => {
@@ -24,7 +26,7 @@ export const Login = () => {
   const { signIn } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
+  const handleEmailSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
@@ -39,18 +41,26 @@ export const Login = () => {
     }
   };
 
-  // Deep Teal for better contrast and premium feel
+  const handleGoogleLogin = async () => {
+    setError("");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`,
+      },
+    });
+    if (error) setError(error.message);
+  };
+
   const brandDark = "#003B46";
   const brandMedium = "#006B7D";
 
   return (
     <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-gradient-to-br from-[#E0F7FA] via-[#B2EBF2] to-[#80DEEA]">
       {/* ===== GLOBAL BACKGROUND ELEMENTS ===== */}
-      {/* Sun Glare */}
       <div className="absolute top-0 right-1/4 w-[600px] h-[600px] rounded-full bg-[#FFF4E6]/40 blur-[100px] -translate-y-1/3 pointer-events-none" />
       <div className="absolute bottom-0 left-0 w-[500px] h-[500px] rounded-full bg-[#E0F7FA]/50 blur-[80px] translate-y-1/3 -translate-x-1/4 pointer-events-none" />
 
-      {/* Floating bubbles */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
         {[...Array(12)].map((_, i) => (
           <div
@@ -68,9 +78,7 @@ export const Login = () => {
         ))}
       </div>
 
-      {/* Waves Background (Spans full width now) */}
       <div className="absolute bottom-0 left-0 w-full h-[45%] pointer-events-none z-0">
-        {/* Wave 1 - Background */}
         <div className="absolute bottom-0 w-full overflow-hidden">
           <svg
             className="w-full h-auto animate-wave-slow"
@@ -90,8 +98,6 @@ export const Login = () => {
             />
           </svg>
         </div>
-
-        {/* Wave 2 - Middle */}
         <div className="absolute bottom-0 w-full overflow-hidden">
           <svg
             className="w-full h-auto animate-wave-medium"
@@ -112,8 +118,6 @@ export const Login = () => {
             />
           </svg>
         </div>
-
-        {/* Wave 3 - Foreground */}
         <div className="absolute bottom-0 w-full overflow-hidden">
           <svg
             className="w-full h-auto animate-wave-fast"
@@ -136,11 +140,8 @@ export const Login = () => {
         </div>
       </div>
 
-      {/* ===== MAIN CONTENT WRAPPER ===== */}
       <div className="relative z-10 w-full max-w-6xl mx-auto flex flex-col lg:flex-row items-center justify-center lg:justify-between gap-12 lg:gap-16 px-6 py-12">
-        {/* ===== LEFT PANEL — Brand / Message ===== */}
         <div className="hidden lg:flex flex-col flex-1 max-w-lg">
-          {/* Logo */}
           <div className="flex items-center gap-3 mb-8 group">
             <FiAnchor
               className="text-5xl group-hover:rotate-12 transition-transform duration-500"
@@ -153,8 +154,6 @@ export const Login = () => {
               DEPTH
             </span>
           </div>
-
-          {/* Tagline */}
           <h1
             className="text-5xl lg:text-6xl font-extrabold leading-tight mb-6"
             style={{ color: brandDark }}
@@ -163,7 +162,6 @@ export const Login = () => {
             <br />
             <span style={{ color: brandMedium }}>only the surface.</span>
           </h1>
-
           <p
             className="text-lg leading-relaxed mb-10 font-medium max-w-md"
             style={{ color: brandDark, opacity: 0.85 }}
@@ -171,8 +169,6 @@ export const Login = () => {
             Welcome back. Dive into your analytics dashboard and discover what
             lies beneath your quiz results.
           </p>
-
-          {/* Feature badges */}
           <div className="flex flex-wrap gap-4">
             <div className="flex items-center gap-2 px-5 py-2.5 bg-white/50 backdrop-blur-md rounded-full border border-white/60 shadow-sm hover:scale-105 transition-transform">
               <FiTrendingUp style={{ color: brandDark }} className="text-lg" />
@@ -204,9 +200,7 @@ export const Login = () => {
           </div>
         </div>
 
-        {/* ===== RIGHT PANEL — Login Form ===== */}
         <div className="w-full max-w-md">
-          {/* Mobile logo (visible only on small screens) */}
           <div className="lg:hidden flex justify-center items-center gap-2 mb-8">
             <FiAnchor className="text-3xl" style={{ color: brandDark }} />
             <span
@@ -217,7 +211,6 @@ export const Login = () => {
             </span>
           </div>
 
-          {/* Card */}
           <div className="bg-white/70 backdrop-blur-xl rounded-[2rem] p-8 md:p-10 border border-white/60 shadow-[0_30px_80px_rgba(0,59,70,0.15)]">
             <div className="mb-8 text-center lg:text-left">
               <h2
@@ -234,8 +227,27 @@ export const Login = () => {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Error Alert */}
+            {/* Google Authentication Button */}
+            <button
+              onClick={handleGoogleLogin}
+              className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-[#003B46] font-bold py-3.5 px-4 rounded-2xl border border-gray-200 shadow-sm transition-all hover:shadow-md mb-6"
+            >
+              <FcGoogle className="text-2xl" />
+              Continue with Google
+            </button>
+
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[#003B46]/10" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="px-4 font-bold tracking-widest text-[#003B46]/40 uppercase bg-transparent backdrop-blur-md rounded-full">
+                  OR EMAIL
+                </span>
+              </div>
+            </div>
+
+            <form onSubmit={handleEmailSubmit} className="space-y-6">
               {error && (
                 <div className="bg-red-50/90 backdrop-blur-sm border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm flex items-center gap-3 font-medium">
                   <span className="text-red-500 text-xl">⚠</span>
@@ -243,14 +255,9 @@ export const Login = () => {
                 </div>
               )}
 
-              {/* Email Field */}
               <div className="space-y-2">
                 <label
-                  className={`block text-sm font-bold transition-colors duration-300 ${
-                    isFocused.email || email
-                      ? "text-[#003B46]"
-                      : "text-[#003B46]/60"
-                  }`}
+                  className={`block text-sm font-bold transition-colors duration-300 ${isFocused.email || email ? "text-[#003B46]" : "text-[#003B46]/60"}`}
                 >
                   Email Address
                 </label>
@@ -258,11 +265,7 @@ export const Login = () => {
                   className={`relative transition-all duration-300 ${isFocused.email ? "scale-[1.02]" : ""}`}
                 >
                   <FiMail
-                    className={`absolute left-4 top-1/2 -translate-y-1/2 text-lg transition-all duration-300 ${
-                      isFocused.email || email
-                        ? "text-[#003B46]"
-                        : "text-[#003B46]/40"
-                    }`}
+                    className={`absolute left-4 top-1/2 -translate-y-1/2 text-lg transition-all duration-300 ${isFocused.email || email ? "text-[#003B46]" : "text-[#003B46]/40"}`}
                   />
                   <input
                     type="email"
@@ -285,27 +288,17 @@ export const Login = () => {
                 </div>
               </div>
 
-              {/* Password Field */}
               <div className="space-y-2">
                 <label
-                  className={`block text-sm font-bold transition-colors duration-300 ${
-                    isFocused.password || password
-                      ? "text-[#003B46]"
-                      : "text-[#003B46]/60"
-                  }`}
+                  className={`block text-sm font-bold transition-colors duration-300 ${isFocused.password || password ? "text-[#003B46]" : "text-[#003B46]/60"}`}
                 >
                   Password
                 </label>
-
                 <div
                   className={`relative transition-all duration-300 ${isFocused.password ? "scale-[1.02]" : ""}`}
                 >
                   <FiLock
-                    className={`absolute left-4 top-1/2 -translate-y-1/2 text-lg transition-all duration-300 ${
-                      isFocused.password || password
-                        ? "text-[#003B46]"
-                        : "text-[#003B46]/40"
-                    }`}
+                    className={`absolute left-4 top-1/2 -translate-y-1/2 text-lg transition-all duration-300 ${isFocused.password || password ? "text-[#003B46]" : "text-[#003B46]/40"}`}
                   />
                   <input
                     type={showPassword ? "text" : "password"}
@@ -341,8 +334,6 @@ export const Login = () => {
                     )}
                   </button>
                 </div>
-
-                {/* Forgot Password Link - Moved here */}
                 <div className="flex justify-end pt-1">
                   <Link
                     to="/forgot-password"
@@ -354,7 +345,6 @@ export const Login = () => {
                 </div>
               </div>
 
-              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={loading}
@@ -371,7 +361,6 @@ export const Login = () => {
                   ) : (
                     <>
                       <span>Dive In</span>
-                      {/* Removed one arrow, kept just this one for clean look */}
                       <FiArrowRight className="text-xl group-hover:translate-x-1 transition-transform duration-300" />
                     </>
                   )}
@@ -379,20 +368,7 @@ export const Login = () => {
               </button>
             </form>
 
-            {/* Divider */}
-            <div className="relative my-8">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-[#003B46]/10" />
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="px-4 font-bold tracking-widest text-[#003B46]/40 uppercase bg-[#e9fbfd] rounded-full">
-                  OR
-                </span>
-              </div>
-            </div>
-
-            {/* Sign Up Link */}
-            <div className="text-center">
+            <div className="text-center mt-8">
               <p className="font-medium text-[#003B46]/70">
                 New to the depths?{" "}
                 <Link
@@ -408,49 +384,19 @@ export const Login = () => {
           </div>
         </div>
       </div>
-
-      {/* ===== ANIMATION STYLES ===== */}
       <style>{`
-        @keyframes wave-slow {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        @keyframes wave-medium {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-45%); }
-        }
-        @keyframes wave-fast {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-40%); }
-        }
+        @keyframes wave-slow { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        @keyframes wave-medium { 0% { transform: translateX(0); } 100% { transform: translateX(-45%); } }
+        @keyframes wave-fast { 0% { transform: translateX(0); } 100% { transform: translateX(-40%); } }
         @keyframes bubble-float {
-          0%, 100% { 
-            transform: translateY(0) translateX(0) scale(1);
-            opacity: 0.1;
-          }
-          25% { 
-            transform: translateY(-40px) translateX(15px) scale(1.2);
-            opacity: 0.4;
-          }
-          50% { 
-            transform: translateY(-80px) translateX(-10px) scale(0.8);
-            opacity: 0.2;
-          }
-          75% { 
-            transform: translateY(-40px) translateX(20px) scale(1.4);
-            opacity: 0.5;
-          }
+          0%, 100% { transform: translateY(0) translateX(0) scale(1); opacity: 0.1; }
+          25% { transform: translateY(-40px) translateX(15px) scale(1.2); opacity: 0.4; }
+          50% { transform: translateY(-80px) translateX(-10px) scale(0.8); opacity: 0.2; }
+          75% { transform: translateY(-40px) translateX(20px) scale(1.4); opacity: 0.5; }
         }
-
-        .animate-wave-slow {
-          animation: wave-slow 35s linear infinite;
-        }
-        .animate-wave-medium {
-          animation: wave-medium 25s linear infinite;
-        }
-        .animate-wave-fast {
-          animation: wave-fast 18s linear infinite;
-        }
+        .animate-wave-slow { animation: wave-slow 35s linear infinite; }
+        .animate-wave-medium { animation: wave-medium 25s linear infinite; }
+        .animate-wave-fast { animation: wave-fast 18s linear infinite; }
       `}</style>
     </div>
   );
