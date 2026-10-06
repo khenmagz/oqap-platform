@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   FiArrowRight,
   FiTarget,
@@ -212,6 +212,24 @@ export const StudentDashboard = () => {
         showToast("Invalid code. Assessment not found.", "error");
         setIsValidating(false);
         return;
+      }
+
+      if (quiz.class_id) {
+        const { data: enrollment, error: enrollmentError } = await supabase
+          .from("class_enrollments")
+          .select("class_id")
+          .eq("class_id", quiz.class_id)
+          .eq("student_id", userData.id)
+          .maybeSingle();
+
+        if (!enrollment || enrollmentError) {
+          showToast(
+            "Access Denied: You are not enrolled in the class for this assessment.",
+            "error",
+          );
+          setIsValidating(false);
+          return;
+        }
       }
 
       if (!quiz.is_active) {
@@ -469,6 +487,7 @@ export const StudentDashboard = () => {
                       <th className="px-6 py-5 font-black">Class Name</th>
                       <th className="px-6 py-5 font-black">Instructor</th>
                       <th className="px-6 py-5 font-black">Joined</th>
+                      <th className="px-6 py-5 font-black text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -509,6 +528,14 @@ export const StudentDashboard = () => {
                             {new Date(
                               enrollment.joined_at,
                             ).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-5 text-right">
+                            <Link
+                              to={`/dashboard/student-classes/${enrollment.classes?.id}`}
+                              className="text-[#00838F] hover:bg-[#E0F7FA]/50 hover:text-[#006064] px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-widest transition-colors inline-block"
+                            >
+                              Dashboard
+                            </Link>
                           </td>
                         </tr>
                       ))

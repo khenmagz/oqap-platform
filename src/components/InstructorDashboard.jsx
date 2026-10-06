@@ -70,7 +70,7 @@ export const InstructorDashboard = () => {
       try {
         const { data, error } = await supabase
           .from("quizzes")
-          .select("*")
+          .select("*, classes(name)")
           .eq("instructor_id", userData.id)
           .order("created_at", { ascending: false });
 
@@ -414,6 +414,11 @@ export const InstructorDashboard = () => {
                       >
                         <td className="px-6 py-5 font-bold text-[#003B46]">
                           {quiz.title}
+                          {quiz.classes?.name && (
+                            <span className="block mt-1 text-[10px] font-black text-[#00838F] uppercase tracking-widest bg-[#E0F7FA]/50 w-max px-2 py-0.5 rounded">
+                              Class: {quiz.classes.name}
+                            </span>
+                          )}
                         </td>
                         <td className="px-6 py-5">
                           <button

@@ -26,11 +26,15 @@ export const GuestJoin = () => {
       try {
         const { data, error: fetchError } = await supabase
           .from("quizzes")
-          .select("id, title, is_active, due_date")
+          .select("id, title, is_active, due_date, class_id")
           .eq("quiz_code", quizCode)
           .maybeSingle();
 
         if (fetchError || !data) throw new Error("Invalid access code.");
+        if (data.class_id)
+          throw new Error(
+            "This assessment belongs to a class. Guest access is denied.",
+          );
         if (!data.is_active)
           throw new Error("This assessment is currently closed.");
         if (data.due_date && new Date(data.due_date) < new Date())

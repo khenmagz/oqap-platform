@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
-  FiBook,
   FiUserPlus,
   FiCopy,
   FiX,
   FiUsers,
   FiChevronRight,
   FiTrash2,
-  FiUserMinus,
-  FiClock,
+  FiBook
 } from "react-icons/fi";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../config/supabase";
@@ -24,13 +23,6 @@ export const InstructorClasses = () => {
   const [newClassName, setNewClassName] = useState("");
   const [toast, setToast] = useState({ message: "", type: "" });
 
-  // Roster & Deletion States
-  const [rosterModal, setRosterModal] = useState({
-    isOpen: false,
-    classData: null,
-  });
-  const [roster, setRoster] = useState([]);
-  const [isRosterLoading, setIsRosterLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState({
     isOpen: false,
     classId: null,
@@ -100,52 +92,7 @@ export const InstructorClasses = () => {
     showToast(`Code ${code} copied to clipboard!`, "success");
   };
 
-  const openRoster = async (classObj) => {
-    setRosterModal({ isOpen: true, classData: classObj });
-    setIsRosterLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("class_enrollments")
-        .select(
-          `
-          student_id, 
-          joined_at, 
-          user_profiles (full_name)
-        `,
-        )
-        .eq("class_id", classObj.id)
-        .order("joined_at", { ascending: false });
 
-      if (error) throw error;
-      setRoster(data || []);
-    } catch (error) {
-      console.error(error);
-      showToast("Failed to load student roster.", "error");
-    } finally {
-      setIsRosterLoading(false);
-    }
-  };
-
-  const handleRemoveStudent = async (studentId, studentName) => {
-    if (!window.confirm(`Remove ${studentName} from this class?`)) return;
-
-    try {
-      const { error } = await supabase
-        .from("class_enrollments")
-        .delete()
-        .eq("class_id", rosterModal.classData.id)
-        .eq("student_id", studentId);
-
-      if (error) throw error;
-
-      setRoster(roster.filter((s) => s.student_id !== studentId));
-      showToast(`${studentName} removed from class.`, "success");
-
-      fetchMyClasses();
-    } catch (error) {
-      showToast("Failed to remove student.", "error");
-    }
-  };
 
   const executeDeleteClass = async () => {
     try {
@@ -262,12 +209,12 @@ export const InstructorClasses = () => {
                       {new Date(c.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-5 text-right flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => openRoster(c)}
+                      <Link
+                        to={`/dashboard/classes/${c.id}`}
                         className="text-[#00838F] hover:bg-[#E0F7FA]/50 hover:text-[#006064] px-3 py-1.5 rounded-lg font-bold text-xs uppercase tracking-widest flex items-center gap-1 transition-colors"
                       >
-                        Roster <FiChevronRight className="text-lg" />
-                      </button>
+                        Dashboard <FiChevronRight className="text-lg" />
+                      </Link>
                       <button
                         onClick={() =>
                           setConfirmDelete({ isOpen: true, classId: c.id })
@@ -286,104 +233,7 @@ export const InstructorClasses = () => {
         </div>
       </div>
 
-      {/* ROSTER MODAL - REDESIGNED */}
-      {rosterModal.isOpen && (
-        <div className="fixed inset-0 z-[100] bg-[#003B46]/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl relative border border-[#006064]/10">
-            <div className="bg-[#F8FDFD] p-8 border-b border-[#006064]/10 flex items-center justify-between shrink-0 rounded-t-3xl">
-              <div>
-                <h2 className="text-3xl font-black text-[#003B46] tracking-tight">
-                  {rosterModal.classData.name}
-                </h2>
-                <div className="flex items-center gap-4 mt-2">
-                  <p className="text-xs font-bold text-[#00838F] uppercase tracking-widest flex items-center gap-2 bg-[#E0F7FA]/50 px-3 py-1 rounded-lg">
-                    Code:{" "}
-                    <span className="font-mono text-sm">
-                      {rosterModal.classData.class_code}
-                    </span>
-                  </p>
-                  <p className="text-xs font-bold text-[#006064]/50 flex items-center gap-1.5 uppercase tracking-widest">
-                    <FiUsers className="text-sm" /> {roster.length} Enrolled
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() =>
-                  setRosterModal({ isOpen: false, classData: null })
-                }
-                className="p-3 bg-white text-gray-400 hover:text-[#003B46] rounded-xl transition-all border border-gray-100 hover:border-[#26C6DA]/30 hover:bg-[#F8FDFD] hover:shadow-sm"
-              >
-                <FiX className="text-xl" />
-              </button>
-            </div>
 
-            <div className="overflow-y-auto p-8 flex-1 bg-[#F8FDFD] rounded-b-3xl">
-              {isRosterLoading ? (
-                <div className="text-center py-12 text-[#006064]/40 font-bold animate-pulse">
-                  Loading student roster...
-                </div>
-              ) : roster.length === 0 ? (
-                <div className="text-center py-16 bg-white rounded-2xl border border-[#006064]/5 shadow-sm">
-                  <div className="w-20 h-20 bg-[#E0F7FA]/50 rounded-full flex items-center justify-center mx-auto mb-4 border border-[#26C6DA]/20">
-                    <FiUsers className="text-4xl text-[#00838F]/40" />
-                  </div>
-                  <h3 className="text-xl font-black text-[#003B46] mb-2">
-                    No Students Yet
-                  </h3>
-                  <p className="text-[#006064]/50 font-medium max-w-sm mx-auto">
-                    Share your class code with students to have them join your
-                    roster.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {roster.map((student) => {
-                    const studentName =
-                      student.user_profiles?.full_name || "Unknown Student";
-                    const initials =
-                      studentName !== "Unknown Student"
-                        ? studentName.charAt(0).toUpperCase()
-                        : "?";
-
-                    return (
-                      <div
-                        key={student.student_id}
-                        className="group flex flex-col sm:flex-row sm:items-center justify-between p-5 rounded-2xl border border-[#006064]/10 hover:border-[#26C6DA]/50 bg-white hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-0.5 transition-all duration-300"
-                      >
-                        <div className="flex items-center gap-5">
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#E0F7FA] to-[#B2EBF2] border border-[#26C6DA]/30 flex items-center justify-center text-[#00838F] font-black text-xl shadow-sm shrink-0">
-                            {initials}
-                          </div>
-                          <div>
-                            <p className="font-black text-[#003B46] text-lg tracking-tight">
-                              {studentName}
-                            </p>
-                            <p className="text-[10px] text-[#006064]/50 font-black uppercase tracking-widest mt-1 flex items-center gap-1.5">
-                              <FiClock className="text-sm" /> Joined{" "}
-                              {new Date(student.joined_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={() =>
-                            handleRemoveStudent(student.student_id, studentName)
-                          }
-                          className="mt-4 sm:mt-0 sm:opacity-0 group-hover:opacity-100 text-red-500 hover:text-white bg-red-50 hover:bg-red-500 border border-red-100 hover:border-red-500 p-2.5 sm:px-4 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest w-full sm:w-auto"
-                          title="Remove Student"
-                        >
-                          <FiUserMinus className="text-lg" />
-                          <span>Remove</span>
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* CREATE CLASS MODAL */}
       {isCreateClassModalOpen && (

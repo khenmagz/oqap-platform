@@ -8,6 +8,10 @@ import {
   FiLoader,
 } from "react-icons/fi";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Configure PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 const AiQuizGenerator = ({ onGenerate }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -48,166 +52,205 @@ const AiQuizGenerator = ({ onGenerate }) => {
     if (activeTypes.length === 0)
       return setError("Select at least one question type.");
 
-    let apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-
-    if (apiKey) {
-      apiKey = apiKey.replace(/['"]/g, "").trim();
-    }
-
-    if (!apiKey || apiKey === "undefined") {
-      return setError(
-        "Missing API Key. Please add VITE_GEMINI_API_KEY to your .env file and restart your terminal.",
-      );
-    }
-
-    setIsGenerating(true);
-    setError("");
-
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(pdfFile);
+      setIsGenerating(true);
+      setError("");
 
-      reader.onload = async () => {
-        try {
-          const base64Data = reader.result.split(",")[1];
-          const genAI = new GoogleGenerativeAI(apiKey);
+      let apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      if (apiKey) apiKey = apiKey.replace(/['"]/g, "").trim();
 
-          const prompt = `You are an expert educator. Generate EXACTLY ${numQuestions} questions based ONLY on the attached PDF document.
+      let deepseekKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
+      if (deepseekKey) deepseekKey = deepseekKey.replace(/['"]/g, "").trim();
+
+      let groqKey = import.meta.env.VITE_GROQ_API_KEY;
+      if (groqKey) groqKey = groqKey.replace(/['"]/g, "").trim();
+
+      if (!apiKey && !deepseekKey && !groqKey) {
+        setIsGenerating(false);
+        return setError("Missing API Keys. Please add VITE_GEMINI_API_KEY, VITE_DEEPSEEK_API_KEY, or VITE_GROQ_API_KEY to your .env file.");
+      }
+
+      // 1. Extract Text using PDF.js
+      const arrayBuffer = await pdfFile.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let extractedText = "";
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        extractedText += content.items.map((item) => item.str).join(" ") + "\n";
+      }
+
+      if (!extractedText.trim()) {
+        throw new Error("Could not extract any text from this PDF. It may be an image-only scan.");
+      }
+
+      const prompt = `You are an expert educator. Generate EXACTLY ${numQuestions} questions based ONLY on the following text extracted from a document.
           Difficulty level: ${difficulty}.
           Allowed question types: ${activeTypes.join(", ")}.
           
-          Return ONLY a valid JSON array of objects. Use this EXACT structure based on the question type:
+          Return ONLY a valid JSON object with a single key "questions" containing an array of objects. Use this EXACT structure based on the question type:
           
-          [
-            {
-              "type": "mcq",
-              "text": "Sample MCQ question?",
-              "options": ["A", "B", "C", "D"],
-              "correctAnswer": 0, 
-              "points": 1
-            },
-            {
-              "type": "multiple_response",
-              "text": "Sample Multiple Response?",
-              "options": ["A", "B", "C", "D"],
-              "correctAnswer": [0, 2],
-              "points": 1
-            },
-            {
-              "type": "true_false",
-              "text": "Sample True or False statement.",
-              "options": ["True", "False"],
-              "correctAnswer": "True", 
-              "points": 1
-            },
-            {
-              "type": "identification",
-              "text": "Sample identification question?",
-              "options": [],
-              "correctAnswer": "The exact text answer",
-              "points": 1
-            }
-          ]`;
-
-          const pdfPart = {
-            inlineData: {
-              data: base64Data,
-              mimeType: "application/pdf",
-            },
-          };
-
-          // Define our robust fallback list
-          const fallbackModels = [
-            "gemini-1.5-flash",
-            "gemini-1.5-flash-8b",
-            "gemini-1.5-pro",
-            "gemini-1.5-flash-latest",
-            "gemini-1.5-pro-latest",
-            "gemini-flash-lite-latest",
-            "gemini-1.0-pro",
-          ];
-
-          let success = false;
-          let lastApiError = null;
-
-          // The Fallback Engine
-          for (const modelName of fallbackModels) {
-            try {
-              console.log(`Attempting generation with: ${modelName}`);
-
-              const model = genAI.getGenerativeModel({
-                model: modelName,
-                generationConfig: { responseMimeType: "application/json" },
-              });
-
-              const result = await model.generateContent([prompt, pdfPart]);
-              const responseText = result.response.text();
-
-              const generatedQuestions = JSON.parse(responseText);
-
-              const formattedQuestions = generatedQuestions.map((q, idx) => {
-                let fixedAnswer = q.correctAnswer;
-                let fixedOptions = q.options || [];
-
-                if (q.type === "true_false") {
-                  fixedOptions = ["True", "False"];
-                  if (fixedAnswer === 0 || fixedAnswer === "0")
-                    fixedAnswer = "True";
-                  if (fixedAnswer === 1 || fixedAnswer === "1")
-                    fixedAnswer = "False";
-                }
-
-                if (
-                  q.type === "identification" &&
-                  typeof fixedAnswer === "number"
-                ) {
-                  fixedAnswer = String(fixedAnswer);
-                }
-
-                return {
-                  ...q,
-                  options: fixedOptions,
-                  correctAnswer: fixedAnswer,
-                  id: Date.now() + idx,
-                };
-              });
-
-              onGenerate(formattedQuestions);
-              setIsOpen(false);
-              setPdfFile(null);
-
-              success = true;
-              break; // If successful, exit the fallback loop immediately
-            } catch (apiError) {
-              console.warn(
-                `[API Fallback] ${modelName} failed:`,
-                apiError.message,
-              );
-              lastApiError = apiError;
-              // Loop will automatically continue to the next model
-            }
+          {
+            "questions": [
+              {
+                "type": "mcq",
+                "text": "Sample MCQ question?",
+                "options": ["A", "B", "C", "D"],
+                "correctAnswer": 0, 
+                "points": 1
+              },
+              {
+                "type": "multiple_response",
+                "text": "Sample Multiple Response?",
+                "options": ["A", "B", "C", "D"],
+                "correctAnswer": [0, 2],
+                "points": 1
+              },
+              {
+                "type": "true_false",
+                "text": "Sample True or False statement.",
+                "options": ["True", "False"],
+                "correctAnswer": "True", 
+                "points": 1
+              },
+              {
+                "type": "identification",
+                "text": "Sample identification question?",
+                "options": [],
+                "correctAnswer": "The exact text answer",
+                "points": 1
+              }
+            ]
           }
 
-          // If the loop finishes and none of the models succeeded, throw the error
-          if (!success) {
-            throw new Error(
-              `All AI models are currently busy. Please try again. (Last error: ${lastApiError?.message})`,
-            );
+          --- EXTRACTED TEXT ---
+          ${extractedText.substring(0, 80000)}`;
+
+      let responseText = null;
+      let lastApiError = null;
+
+      // 2a. Gemini Fallbacks
+      if (apiKey && apiKey !== "undefined") {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const fallbackModels = [
+          "gemini-1.5-flash",
+          "gemini-1.5-flash-8b",
+          "gemini-1.5-pro",
+          "gemini-1.5-flash-latest",
+          "gemini-1.5-pro-latest",
+          "gemini-flash-lite-latest",
+          "gemini-1.0-pro",
+        ];
+
+        for (const modelName of fallbackModels) {
+          try {
+            console.log(`Attempting generation with: ${modelName}`);
+            const model = genAI.getGenerativeModel({
+              model: modelName,
+              generationConfig: { responseMimeType: "application/json" },
+            });
+            const result = await model.generateContent([prompt]);
+            responseText = result.response.text();
+            break; 
+          } catch (apiError) {
+            console.warn(`[API Fallback] ${modelName} failed:`, apiError.message);
+            lastApiError = apiError;
           }
-        } catch (error) {
-          console.error("Process Error:", error);
-          setError(`Error: ${error.message}`);
-        } finally {
-          setIsGenerating(false);
         }
-      };
+      }
 
-      reader.onerror = () => {
-        setError("Failed to read the PDF file locally.");
-        setIsGenerating(false);
-      };
-    } catch (err) {
-      setError(err.message || "An unexpected error occurred.");
+      // 2b. DeepSeek Fallback
+      if (!responseText && deepseekKey && deepseekKey !== "undefined") {
+        try {
+          console.log("Attempting generation with: DeepSeek (deepseek-chat)");
+          const response = await fetch("https://api.deepseek.com/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${deepseekKey}`
+            },
+            body: JSON.stringify({
+              model: "deepseek-chat",
+              messages: [{ role: "user", content: prompt }],
+              response_format: { type: "json_object" }
+            })
+          });
+          if (!response.ok) throw new Error("DeepSeek API failed: " + response.statusText);
+          const data = await response.json();
+          responseText = data.choices[0].message.content;
+        } catch (apiError) {
+          console.warn(`[API Fallback] DeepSeek failed:`, apiError.message);
+          lastApiError = apiError;
+        }
+      }
+
+      // 2c. Groq Fallback
+      if (!responseText && groqKey && groqKey !== "undefined") {
+        try {
+          console.log("Attempting generation with: Groq (llama-3.1-8b-instant)");
+          const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${groqKey}`
+            },
+            body: JSON.stringify({
+              model: "llama-3.1-8b-instant",
+              messages: [{ role: "user", content: prompt }],
+              response_format: { type: "json_object" }
+            })
+          });
+          if (!response.ok) throw new Error("Groq API failed: " + response.statusText);
+          const data = await response.json();
+          responseText = data.choices[0].message.content;
+        } catch (apiError) {
+          console.warn(`[API Fallback] Groq failed:`, apiError.message);
+          lastApiError = apiError;
+        }
+      }
+
+      if (!responseText) {
+        throw new Error(`All AI models are currently busy or failed. (Last error: ${lastApiError?.message})`);
+      }
+
+      // 3. Process the AI Response
+      let parsed = JSON.parse(responseText);
+      let generatedQuestions = parsed.questions || parsed;
+
+      if (!Array.isArray(generatedQuestions)) {
+        throw new Error("AI did not return a valid array of questions.");
+      }
+
+      const formattedQuestions = generatedQuestions.map((q, idx) => {
+        let fixedAnswer = q.correctAnswer;
+        let fixedOptions = q.options || [];
+
+        if (q.type === "true_false") {
+          fixedOptions = ["True", "False"];
+          if (fixedAnswer === 0 || fixedAnswer === "0") fixedAnswer = "True";
+          if (fixedAnswer === 1 || fixedAnswer === "1") fixedAnswer = "False";
+        }
+
+        if (q.type === "identification" && typeof fixedAnswer === "number") {
+          fixedAnswer = String(fixedAnswer);
+        }
+
+        return {
+          ...q,
+          options: fixedOptions,
+          correctAnswer: fixedAnswer,
+          id: Date.now() + idx,
+        };
+      });
+
+      onGenerate(formattedQuestions, difficulty);
+      setIsOpen(false);
+      setPdfFile(null);
+
+    } catch (error) {
+      console.error("Process Error:", error);
+      setError(`Error: ${error.message}`);
+    } finally {
       setIsGenerating(false);
     }
   };

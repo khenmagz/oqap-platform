@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   FiPlus,
   FiTrash2,
@@ -32,9 +32,11 @@ export const QuizStudio = () => {
   const [feedbackMode, setFeedbackMode] = useState("score_only");
 
   // NEW: State for Classes
+  const [searchParams] = useSearchParams();
   const [classes, setClasses] = useState([]);
-  const [selectedClassId, setSelectedClassId] = useState("");
+  const [selectedClassId, setSelectedClassId] = useState(searchParams.get("classId") || "");
   const [isDeploying, setIsDeploying] = useState(false);
+  const [quizDifficulty, setQuizDifficulty] = useState(null);
 
   const [questions, setQuestions] = useState([
     {
@@ -193,6 +195,7 @@ export const QuizStudio = () => {
             shuffle_questions: shuffleQuestions,
             release_grades: releaseGrades,
             release_answers: releaseAnswers,
+            difficulty: quizDifficulty,
           },
         ])
         .select()
@@ -233,6 +236,7 @@ export const QuizStudio = () => {
         },
       ]);
       setFeedbackMode("score_only");
+      setQuizDifficulty(null);
       showToast(
         `Quiz deployed successfully! Your code is ${generatedCode}`,
         "success",
@@ -549,12 +553,13 @@ export const QuizStudio = () => {
         </button>
 
         <AiQuizGenerator
-          onGenerate={(newQs) => {
+          onGenerate={(newQs, genDifficulty) => {
             if (questions.length === 1 && !questions[0].text.trim()) {
               setQuestions(newQs);
             } else {
               setQuestions([...questions, ...newQs]);
             }
+            if (genDifficulty) setQuizDifficulty(genDifficulty);
             showToast(`${newQs.length} AI questions imported!`, "success");
           }}
         />

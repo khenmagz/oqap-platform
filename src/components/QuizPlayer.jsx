@@ -38,13 +38,35 @@ export const QuizPlayer = () => {
   // --- INITIALIZATION ---
   useEffect(() => {
     const initializeQuiz = async () => {
+      let errorOccurred = false;
+      let finalModalType = "start";
+
       try {
         const { data: quizData, error: quizError } = await supabase
           .from("quizzes")
-          .select("shuffle_questions, max_attempts")
+          .select("shuffle_questions, max_attempts, class_id")
           .eq("id", quizId)
           .single();
         if (quizError) throw quizError;
+
+        if (quizData.class_id) {
+          if (!userData) {
+            finalModalType = "unauthorized";
+            return;
+          }
+
+          const { data: enrollment, error: enrollmentError } = await supabase
+            .from("class_enrollments")
+            .select("class_id")
+            .eq("class_id", quizData.class_id)
+            .eq("student_id", userData.id)
+            .maybeSingle();
+
+          if (!enrollment || enrollmentError) {
+            finalModalType = "unauthorized";
+            return;
+          }
+        }
 
         const { data: qData, error: qError } = await supabase
           .from("secure_questions_view")
@@ -91,8 +113,7 @@ export const QuizPlayer = () => {
               quizData.max_attempts > 0 &&
               attemptsCount >= quizData.max_attempts
             ) {
-              setModal({ show: true, type: "exhausted", data: null });
-              setLoading(false);
+              finalModalType = "exhausted";
               return;
             }
 
@@ -120,11 +141,12 @@ export const QuizPlayer = () => {
         if (savedDraft) setAnswers(JSON.parse(savedDraft));
       } catch (error) {
         console.error("Initialization error:", error);
+        errorOccurred = true;
         navigate("/", { replace: true });
       } finally {
-        if (modal.type !== "exhausted") {
+        if (!errorOccurred) {
           setLoading(false);
-          setModal({ show: true, type: "start", data: null });
+          setModal({ show: true, type: finalModalType, data: null });
         }
       }
     };
@@ -298,6 +320,28 @@ export const QuizPlayer = () => {
       {modal.show && (
         <div className="fixed inset-0 z-[999] bg-[#003B46]/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-md p-8 shadow-2xl text-center border border-[#006064]/10 animate-fade-in-up">
+            {modal.type === "unauthorized" && (
+              <>
+                <div className="bg-red-50 p-4 rounded-full inline-block mb-6 border border-red-100">
+                  <FiShield className="text-4xl text-red-500" />
+                </div>
+                <h2 className="text-2xl font-black text-[#003B46] mb-3">
+                  Access Restricted
+                </h2>
+                <p className="text-sm font-medium text-[#006064]/70 mb-8 leading-relaxed">
+                  You are not enrolled in the class assigned to this assessment. Please contact your instructor for access.
+                </p>
+                <button
+                  onClick={() =>
+                    navigate(userData ? "/dashboard" : "/", { replace: true })
+                  }
+                  className="w-full bg-[#00838F] hover:bg-[#006064] text-white py-3.5 rounded-xl text-sm font-black uppercase tracking-widest transition-colors shadow-md"
+                >
+                  Return
+                </button>
+              </>
+            )}
+
             {modal.type === "exhausted" && (
               <>
                 <div className="bg-red-50 p-4 rounded-full inline-block mb-6 border border-red-100">

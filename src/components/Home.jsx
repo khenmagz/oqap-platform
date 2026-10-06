@@ -174,13 +174,11 @@ const Home = () => {
 
       {/* ======================== NAVBAR ======================== */}
       <header
-        className={`fixed top-0 left-0 right-0 z-50 w-full transition-all duration-500 ease-out ${
-          isVisible ? "translate-y-0" : "-translate-y-full"
-        } ${
-          scrolled
+        className={`fixed top-0 left-0 right-0 z-50 w-full transition-all duration-500 ease-out ${isVisible ? "translate-y-0" : "-translate-y-full"
+          } ${scrolled
             ? "bg-[#050A12]/90 backdrop-blur-2xl shadow-2xl border-b border-white/5"
             : "bg-white/80 backdrop-blur-md shadow-sm"
-        }`}
+          }`}
       >
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div

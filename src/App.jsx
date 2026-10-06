@@ -17,6 +17,8 @@ import { Login } from "./components/Login";
 import { Signup } from "./components/Signup";
 import { SignupInstructor } from "./components/SignupInstructor";
 import { Dashboard } from "./components/Dashboard";
+import { StudentClassDashboard } from "./components/StudentClassDashboard";
+import { StudentAnalyticsProfile } from "./components/StudentAnalyticsProfile";
 import { QuizStudio } from "./components/QuizStudio";
 import { QuizPlayer } from "./components/QuizPlayer";
 import { ForgotPassword } from "./components/ForgotPassword";
@@ -28,7 +30,8 @@ import { PracticeArena } from "./components/PracticeArena";
 import { EditQuiz } from "./components/EditQuiz";
 import { GuestJoin } from "./components/GuestJoin";
 import { RoleSetup } from "./components/RoleSetup";
-import { InstructorClasses } from "./components/InstructorClasses"; // <-- Added Import
+import { InstructorClasses } from "./components/InstructorClasses";
+import { ClassDashboard } from "./components/ClassDashboard";
 
 // Auth Provider
 import { AuthProvider } from "./context/AuthContext";
@@ -61,8 +64,19 @@ const App = () => {
           <Route
             path="/dashboard/classes"
             element={<InstructorClasses />}
-          />{" "}
-          {/* <-- Added Route */}
+          />
+          <Route
+            path="/dashboard/classes/:classId"
+            element={<ClassDashboard />}
+          />
+          <Route
+            path="/dashboard/classes/:classId/student/:studentId"
+            element={<StudentAnalyticsProfile />}
+          />
+          <Route
+            path="/dashboard/student-classes/:classId"
+            element={<StudentClassDashboard />}
+          />
         </Route>
 
         {/* GROUP 3: Isolated Routes (NO Sidebar, Fullscreen Player/Setup) */}
